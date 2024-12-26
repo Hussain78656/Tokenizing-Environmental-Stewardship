@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Planting Initiative</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/4.5.0/web3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+    <style>
+        .tree-card {
+            transition: transform 0.2s;
+        }
+        .tree-card:hover {
+            transform: translateY(-5px);
+        }
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-green-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-green-800 mb-4">Tree Planting Initiative</h1>
+            <p class="text-gray-600 mb-4">Plant trees, earn carbon credits, make a difference</p>
+            <div id="walletStatus" class="text-sm text-gray-500"></div>
+        </header>
+
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Plant Tree Form -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-semibold text-green-700 mb-4">Plant a Tree</h2>
+                <form id="plantTreeForm" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Location</label>
+                        <input type="text" id="location" required
+                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            placeholder="Enter geographic location">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                        Plant Tree
+                    </button>
+                </form>
+            </div>
+
+            <!-- Carbon Credits Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-semibold text-green-700 mb-4">Claim Carbon Credits</h2>
+                <form id="claimCreditsForm" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Tree ID</label>
+                        <input type="number" id="treeId" required
+                            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            placeholder="Enter tree ID">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        Claim Credits
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Trees List -->
+        <div class="mt-12">
+            <h2 class="text-2xl font-semibold text-green-700 mb-6">Your Planted Trees</h2>
+            <div id="treesList" class="grid md:grid-cols-3 gap-6">
+                <!-- Trees will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let web3;
+        let contract;
+        const contractAddress = '0xc31E78480dD6b62de33A0a52C08bb9609231C94e';
+        const contractABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "treeId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "planter",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "carbonCredits",
+				"type": "uint256"
+			}
+		],
+		"name": "CarbonCreditsClaimed",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_treeId",
+				"type": "uint256"
+			}
+		],
+		"name": "claimCarbonCredits",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_location",
+				"type": "string"
+			}
+		],
+		"name": "plantTree",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "treeId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "planter",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "location",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "plantedDate",
+				"type": "uint256"
+			}
+		],
+		"name": "TreePlanted",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "treeCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "trees",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "planter",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "plantedDate",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "carbonCredits",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "verified",
+				"type": "bool"
+			},
+			{
+				"internalType": "string",
+				"name": "location",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+        async function init() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Request account access
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    web3 = new Web3(window.ethereum);
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+                    
+                    const accounts = await web3.eth.getAccounts();
+                    document.getElementById('walletStatus').textContent = 
+                        Connected Wallet: ${accounts[0].substring(0, 6)}...${accounts[0].substring(38)};
+                    
+                    // Load existing trees
+                    loadTrees();
+                } catch (error) {
+                    console.error('User denied account access');
+                }
+            } else {
+                console.log('Please install MetaMask!');
+                document.getElementById('walletStatus').textContent = 'Please install MetaMask!';
+            }
+        }
+
+        async function plantTree(event) {
+            event.preventDefault();
+            const location = document.getElementById('location').value;
+            
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.plantTree(location).send({ from: accounts[0] });
+                
+                // Clear form and reload trees
+                document.getElementById('location').value = '';
+                loadTrees();
+                
+                alert('Tree planted successfully!');
+            } catch (error) {
+                console.error('Error planting tree:', error);
+                alert('Error planting tree. Please try again.');
+            }
+        }
+
+        async function claimCredits(event) {
+            event.preventDefault();
+            const treeId = document.getElementById('treeId').value;
+            
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.claimCarbonCredits(treeId).send({ from: accounts[0] });
+                
+                // Clear form and reload trees
+                document.getElementById('treeId').value = '';
+                loadTrees();
+                
+                alert('Carbon credits claimed successfully!');
+            } catch (error) {
+                console.error('Error claiming credits:', error);
+                alert('Error claiming credits. Please try again.');
+            }
+        }
+
+        async function loadTrees() {
+            const treesList = document.getElementById('treesList');
+            treesList.innerHTML = ''; // Clear existing trees
+            
+            try {
+                const accounts = await web3.eth.getAccounts();
+                // In a real implementation, you would query the contract for all trees
+                // associated with the current account and display them
+                // This is a placeholder that shows how trees would be displayed
+                const mockTrees = [
+                    { id: 1, location: 'New York', plantedDate: '2024-01-01', credits: 10 },
+                    { id: 2, location: 'London', plantedDate: '2024-02-01', credits: 10 }
+                ];
+                
+                mockTrees.forEach(tree => {
+                    const treeCard = document.createElement('div');
+                    treeCard.className = 'tree-card bg-white rounded-lg shadow-lg p-6 hover:shadow-xl';
+                    treeCard.innerHTML = `
+                        <h3 class="text-xl font-semibold text-green-700 mb-2">Tree #${tree.id}</h3>
+                        <p class="text-gray-600 mb-2">Location: ${tree.location}</p>
+                        <p class="text-gray-600 mb-2">Planted: ${tree.plantedDate}</p>
+                        <p class="text-gray-600">Carbon Credits: ${tree.credits}</p>
+                    `;
+                    treesList.appendChild(treeCard);
+                });
+            } catch (error) {
+                console.error('Error loading trees:', error);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('plantTreeForm').addEventListener('submit', plantTree);
+        document.getElementById('claimCreditsForm').addEventListener('submit', claimCredits);
+
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>
+
